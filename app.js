@@ -1,5 +1,6 @@
 // --- State ---
 const STATE_KEY = "pm_trainer_state";
+const API_KEY_KEY = "pm_trainer_api_key";
 
 function loadState() {
   const raw = localStorage.getItem(STATE_KEY);
@@ -17,6 +18,14 @@ function saveState(s) {
   localStorage.setItem(STATE_KEY, JSON.stringify(s));
 }
 
+function getApiKey() {
+  return localStorage.getItem(API_KEY_KEY);
+}
+
+function setApiKey(key) {
+  localStorage.setItem(API_KEY_KEY, key);
+}
+
 let state = loadState();
 let sessionDrills = [];
 let currentDrillIndex = 0;
@@ -24,6 +33,150 @@ let timerInterval = null;
 let timeLeft = 600;
 let sessionResults = [];
 let isFreeMode = false;
+let feedbackVisible = false;
+
+// --- Claude API ---
+async function callClaude(systemPrompt, userMessage) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("No API key set");
+
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }]
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  return data.content[0].text;
+}
+
+function buildFeedbackPrompt(drill, userResponse) {
+  const drillType = drill.drillType;
+  const typeLabel = TYPE_LABELS[drillType] || drillType;
+
+  let context = "";
+  if (drill.scenario) context += `Scenario: ${drill.scenario}\n`;
+  if (drill.context) context += `Context: ${drill.context}\n`;
+  if (drill.original) context += `Original (bad) statement to fix: "${drill.original}"\n`;
+  context += `Exercise prompt: ${drill.prompt}\n`;
+
+  let frameworkRef = "";
+  if (drillType === "bluf_rewrite") {
+    frameworkRef = "BLUF (Bottom Line Up Front): Lead with the conclusion/ask, then supporting logic, urgency, and next steps.";
+  } else if (drillType === "pyramid_structure") {
+    frameworkRef = "Pyramid Principle: Answer first, then 2-3 grouped supporting arguments, each backed by evidence.";
+  } else if (drillType === "scqa_framing") {
+    frameworkRef = "SCQA: Situation (stable state) → Complication (what changed) → Question (key question) → Answer (recommendation).";
+  } else if (drillType === "antipattern_fix") {
+    frameworkRef = "Common anti-patterns: hedging language, burying the lead, passive voice, over-qualifying, vague asks, unnecessary apologies, solution-jumping.";
+  } else if (drillType === "one_breath") {
+    frameworkRef = "One-Breath Rule: Deliver the core message in ~15 seconds / 2 sentences. If you can't, simplify.";
+  } else if (drillType === "stakeholder_sim") {
+    frameworkRef = "Stakeholder management: Balance empathy with clarity. Acknowledge concerns, own gaps, provide specific next steps. Don't take sides or make empty promises.";
+  }
+
+  return {
+    system: `You are a senior PM communication coach. You give concise, actionable feedback on PM articulation exercises.
+
+Your feedback MUST follow this exact JSON structure — no markdown, no extra text, just valid JSON:
+{
+  "score": <number 1-10>,
+  "good": "<what the user did well — be specific, quote their words>",
+  "improve": "<what needs work — be specific about which words/patterns to change and why>",
+  "rewrite": "<your improved version of their response that demonstrates the feedback>"
+}
+
+Framework reference for this drill: ${frameworkRef}
+
+Scoring guide:
+1-3: Misses the framework entirely, contains multiple anti-patterns
+4-5: Partially applies the framework, has notable weaknesses
+6-7: Solid application with room for improvement
+8-9: Strong execution with minor polish needed
+10: Exceptional — clear, structured, authoritative
+
+Be tough but encouraging. Focus on PM-specific communication patterns, not grammar. Always explain WHY something should change, tied back to organizational effectiveness and influence.`,
+
+    user: `Drill type: ${typeLabel}
+${context}
+User's response:
+"${userResponse}"
+
+Analyze this response and return your feedback as JSON.`
+  };
+}
+
+async function getFeedback(drill, userResponse) {
+  const { system, user } = buildFeedbackPrompt(drill, userResponse);
+  const raw = await callClaude(system, user);
+
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Invalid feedback format");
+  return JSON.parse(jsonMatch[0]);
+}
+
+function renderFeedback(feedback) {
+  const area = document.getElementById("feedback-area");
+  area.style.display = "block";
+  area.innerHTML = `
+    <div class="fb-score" style="color: ${feedback.score >= 7 ? 'var(--green)' : feedback.score >= 4 ? 'var(--orange)' : 'var(--accent2)'}">
+      Score: ${feedback.score}/10
+    </div>
+    <div class="fb-good">
+      <h4>What you did well</h4>
+      <p>${escapeHtml(feedback.good)}</p>
+    </div>
+    <div class="fb-improve">
+      <h4>What to improve</h4>
+      <p>${escapeHtml(feedback.improve)}</p>
+    </div>
+    <div class="fb-rewrite">
+      <h4>Stronger version</h4>
+      <div class="rewrite-text">${escapeHtml(feedback.rewrite)}</div>
+    </div>
+  `;
+  feedbackVisible = true;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function showFeedbackLoading() {
+  const area = document.getElementById("feedback-area");
+  area.style.display = "block";
+  area.innerHTML = `<div class="loading-feedback"><span class="spinner"></span>Analyzing your response...</div>`;
+}
+
+function showFeedbackError(msg) {
+  const area = document.getElementById("feedback-area");
+  area.style.display = "block";
+  area.innerHTML = `<div class="loading-feedback" style="color: var(--accent2);">${escapeHtml(msg)}</div>`;
+}
+
+function hideFeedback() {
+  const area = document.getElementById("feedback-area");
+  area.style.display = "none";
+  area.innerHTML = "";
+  feedbackVisible = false;
+}
 
 // --- Navigation ---
 document.querySelectorAll(".nav-btn").forEach(btn => {
@@ -38,6 +191,22 @@ function showScreen(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 }
+
+// --- Setup Screen ---
+document.getElementById("save-key-btn").addEventListener("click", () => {
+  const key = document.getElementById("api-key-input").value.trim();
+  if (!key) return;
+  setApiKey(key);
+  showScreen("home-screen");
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  document.querySelector('.nav-btn[data-screen="home-screen"]').classList.add("active");
+  renderHome();
+});
+
+document.getElementById("change-key-btn").addEventListener("click", () => {
+  document.getElementById("api-key-input").value = getApiKey() || "";
+  showScreen("setup-screen");
+});
 
 // --- Home Screen ---
 function renderHome() {
@@ -92,7 +261,6 @@ function generateSession() {
     { type: "stakeholder_sim", weight: 1 }
   ];
 
-  // Pick ~8 drills with weighted random selection across types
   const pool = [];
   types.forEach(t => {
     const items = DRILL_SCENARIOS[t.type];
@@ -103,12 +271,10 @@ function generateSession() {
     }
   });
 
-  // Shuffle weighted
   const shuffled = pool
     .map(p => ({ ...p, sort: Math.random() * p.weight }))
     .sort((a, b) => b.sort - a.sort);
 
-  // Pick up to 8, no more than 2 per type
   const typeCounts = {};
   for (const item of shuffled) {
     if (drills.length >= 8) break;
@@ -118,7 +284,6 @@ function generateSession() {
     drills.push(item);
   }
 
-  // Shuffle final order
   for (let i = drills.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [drills[i], drills[j]] = [drills[j], drills[i]];
@@ -147,6 +312,7 @@ function startSession(free) {
   currentDrillIndex = 0;
   sessionResults = [];
   timeLeft = 600;
+  hideFeedback();
   showScreen("session-screen");
   startTimer();
   renderDrill();
@@ -174,6 +340,8 @@ function updateTimerDisplay() {
 }
 
 function renderDrill() {
+  hideFeedback();
+
   if (currentDrillIndex >= sessionDrills.length) {
     endSession();
     return;
@@ -248,8 +416,8 @@ function renderAntipatternFix(drill, area, actions) {
 
   actions.innerHTML = `
     <button class="btn-skip" onclick="skipDrill()">Skip</button>
-    <button class="btn-reveal" onclick="revealExample()">See Example</button>
-    <button class="btn-next" onclick="saveDrillAndNext()">Next</button>
+    <button class="btn-feedback" onclick="submitForFeedback()">Get Feedback</button>
+    <button class="btn-next" onclick="saveAndNext()">Next</button>
   `;
 }
 
@@ -275,11 +443,12 @@ function renderWritingDrill(drill, area, actions) {
 
   actions.innerHTML = `
     <button class="btn-skip" onclick="skipDrill()">Skip</button>
-    <button class="btn-next" onclick="saveDrillAndNext()">Next</button>
+    <button class="btn-feedback" onclick="submitForFeedback()">Get Feedback</button>
+    <button class="btn-next" onclick="saveAndNext()">Next</button>
   `;
 }
 
-// --- Drill Navigation ---
+// --- Drill Actions ---
 window.nextDrill = function () {
   currentDrillIndex++;
   renderDrill();
@@ -291,7 +460,7 @@ window.skipDrill = function () {
   renderDrill();
 };
 
-window.saveDrillAndNext = function () {
+window.saveAndNext = function () {
   const response = document.getElementById("drill-response")?.value || "";
   sessionResults.push({
     type: sessionDrills[currentDrillIndex]?.drillType,
@@ -302,44 +471,61 @@ window.saveDrillAndNext = function () {
   renderDrill();
 };
 
-window.revealExample = function () {
-  const drill = sessionDrills[currentDrillIndex];
-  const area = document.getElementById("drill-area");
-  const existing = area.querySelector(".good-example");
-  if (existing) {
-    existing.remove();
+window.submitForFeedback = async function () {
+  const response = document.getElementById("drill-response")?.value?.trim();
+  if (!response) {
+    showFeedbackError("Write something first, then get feedback.");
     return;
   }
-  // Find matching antipattern example
-  for (const ap of ANTI_PATTERNS) {
-    for (const ex of ap.examples) {
-      if (ex.bad && drill.original && ex.bad.substring(0, 30) === drill.original.substring(0, 30)) {
-        const div = document.createElement("div");
-        div.className = "good-example";
-        div.innerHTML = `<strong>Strong version:</strong> "${ex.good}"<br><br><em>${ex.why}</em>`;
-        area.appendChild(div);
-        return;
-      }
+
+  if (!getApiKey()) {
+    showFeedbackError("No API key set. Go to settings to add one.");
+    return;
+  }
+
+  const drill = sessionDrills[currentDrillIndex];
+  showFeedbackLoading();
+
+  // Disable the feedback button while loading
+  const fbBtn = document.querySelector(".btn-feedback");
+  if (fbBtn) {
+    fbBtn.disabled = true;
+    fbBtn.textContent = "Analyzing...";
+  }
+
+  try {
+    const feedback = await getFeedback(drill, response);
+    renderFeedback(feedback);
+    sessionResults.push({
+      type: drill.drillType,
+      response,
+      completed: true,
+      score: feedback.score,
+      feedback
+    });
+  } catch (err) {
+    showFeedbackError(`Feedback failed: ${err.message}`);
+  } finally {
+    if (fbBtn) {
+      fbBtn.disabled = false;
+      fbBtn.textContent = "Get Feedback";
     }
   }
-  // Generic hint if no match
-  const div = document.createElement("div");
-  div.className = "good-example";
-  div.textContent = "Try removing hedging words, using active voice, and leading with your main point.";
-  area.appendChild(div);
 };
 
 // --- Session End ---
 function endSession() {
   clearInterval(timerInterval);
+  hideFeedback();
 
   const today = new Date().toDateString();
   const completed = sessionResults.filter(r => r.completed || r.correct !== undefined).length;
   const quizCorrect = sessionResults.filter(r => r.correct === true).length;
   const quizTotal = sessionResults.filter(r => r.correct !== undefined).length;
   const skipped = sessionResults.filter(r => r.skipped).length;
+  const scores = sessionResults.filter(r => r.score).map(r => r.score);
+  const avgScore = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : null;
 
-  // Update state
   if (!isFreeMode) {
     if (state.lastSessionDate !== today) {
       const yesterday = new Date();
@@ -361,12 +547,12 @@ function endSession() {
   });
   saveState(state);
 
-  // Render review
   const summary = document.getElementById("review-summary");
   summary.innerHTML = `
     <div class="review-stat"><span>Drills completed</span><span>${completed}</span></div>
     <div class="review-stat"><span>Skipped</span><span>${skipped}</span></div>
     ${quizTotal > 0 ? `<div class="review-stat"><span>Quiz accuracy</span><span>${quizCorrect}/${quizTotal}</span></div>` : ""}
+    ${avgScore ? `<div class="review-stat"><span>Avg feedback score</span><span>${avgScore}/10</span></div>` : ""}
     <div class="review-stat"><span>Time used</span><span>${formatTime(600 - timeLeft)}</span></div>
     <div class="review-stat"><span>Streak</span><span>${state.streak} days</span></div>
   `;
@@ -388,4 +574,9 @@ document.getElementById("back-home-btn").addEventListener("click", () => {
 });
 
 // --- Init ---
-renderHome();
+if (getApiKey()) {
+  showScreen("home-screen");
+  renderHome();
+} else {
+  showScreen("setup-screen");
+}
