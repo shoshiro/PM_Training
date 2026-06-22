@@ -13,11 +13,23 @@
       <div id="streak-display"></div>
     </header>
 
+    <!-- API Key Setup -->
+    <section id="setup-screen" class="screen">
+      <div class="card">
+        <h2>Setup</h2>
+        <p class="setup-desc">This app uses Claude to give you personalized feedback on your responses. Your API key is stored only in your browser's localStorage.</p>
+        <label for="api-key-input">Anthropic API Key</label>
+        <input type="password" id="api-key-input" placeholder="sk-ant-..." />
+        <button id="save-key-btn" class="primary-btn">Save & Start</button>
+        <p class="setup-note">Get a key at <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></p>
+      </div>
+    </section>
+
     <!-- Landing / Home -->
-    <section id="home-screen" class="screen active">
+    <section id="home-screen" class="screen">
       <div class="card welcome-card">
         <h2>Daily 10-Min Training</h2>
-        <p>Sharpen how you communicate as a PM. Practice frameworks, fix anti-patterns, and build the habit of clear, influential speech.</p>
+        <p>Sharpen how you communicate as a PM. Practice frameworks, fix anti-patterns, and get AI-powered feedback on every response.</p>
         <div id="today-status"></div>
         <button id="start-btn" class="primary-btn">Start Today's Session</button>
         <button id="practice-btn" class="secondary-btn">Free Practice</button>
@@ -26,6 +38,7 @@
         <h3>Progress</h3>
         <div id="stats-grid"></div>
       </div>
+      <button id="change-key-btn" class="link-btn">Change API Key</button>
     </section>
 
     <!-- Session Screen -->
@@ -36,6 +49,7 @@
         <div id="drill-counter"></div>
       </div>
       <div id="drill-area" class="card"></div>
+      <div id="feedback-area" class="card" style="display:none"></div>
       <div id="drill-actions"></div>
     </section>
 

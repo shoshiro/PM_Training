@@ -372,3 +372,137 @@ header h1 { font-size: 1.2rem; }
   color: var(--text2);
   line-height: 1.4;
 }
+
+/* Setup */
+.setup-desc {
+  color: var(--text2);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+#setup-screen label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text2);
+  margin-bottom: 6px;
+}
+
+#setup-screen input {
+  width: 100%;
+  padding: 12px;
+  background: var(--surface2);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  margin-bottom: 16px;
+}
+
+#setup-screen input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.setup-note {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text2);
+  margin-top: 8px;
+}
+
+.setup-note a { color: var(--accent); }
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: block;
+  margin: 0 auto;
+  padding: 8px;
+}
+
+.link-btn:hover { color: var(--accent); }
+
+/* Feedback */
+#feedback-area {
+  border-left: 3px solid var(--accent);
+}
+
+#feedback-area h4 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+#feedback-area .fb-good h4 { color: var(--green); }
+#feedback-area .fb-improve h4 { color: var(--orange); }
+#feedback-area .fb-rewrite h4 { color: var(--accent); }
+
+#feedback-area .fb-good,
+#feedback-area .fb-improve,
+#feedback-area .fb-rewrite {
+  margin-bottom: 14px;
+}
+
+#feedback-area .fb-good p,
+#feedback-area .fb-improve p,
+#feedback-area .fb-rewrite p {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+#feedback-area .fb-rewrite .rewrite-text {
+  background: var(--surface2);
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 6px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text);
+  font-style: italic;
+}
+
+#feedback-area .fb-score {
+  display: inline-block;
+  background: var(--surface2);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.loading-feedback {
+  text-align: center;
+  padding: 20px;
+  color: var(--text2);
+  font-size: 0.9rem;
+}
+
+.loading-feedback .spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--surface2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-feedback {
+  background: var(--green);
+  color: #000;
+  font-weight: 600;
+}
