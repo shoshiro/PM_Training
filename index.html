@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PM Articulation Training</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>PM Articulation Trainer</h1>
+      <div id="streak-display"></div>
+    </header>
+
+    <!-- Landing / Home -->
+    <section id="home-screen" class="screen active">
+      <div class="card welcome-card">
+        <h2>Daily 10-Min Training</h2>
+        <p>Sharpen how you communicate as a PM. Practice frameworks, fix anti-patterns, and build the habit of clear, influential speech.</p>
+        <div id="today-status"></div>
+        <button id="start-btn" class="primary-btn">Start Today's Session</button>
+        <button id="practice-btn" class="secondary-btn">Free Practice</button>
+      </div>
+      <div class="card stats-card">
+        <h3>Progress</h3>
+        <div id="stats-grid"></div>
+      </div>
+    </section>
+
+    <!-- Session Screen -->
+    <section id="session-screen" class="screen">
+      <div class="session-header">
+        <div id="timer">10:00</div>
+        <div id="progress-bar"><div id="progress-fill"></div></div>
+        <div id="drill-counter"></div>
+      </div>
+      <div id="drill-area" class="card"></div>
+      <div id="drill-actions"></div>
+    </section>
+
+    <!-- Review Screen -->
+    <section id="review-screen" class="screen">
+      <div class="card">
+        <h2>Session Complete</h2>
+        <div id="review-summary"></div>
+        <button id="back-home-btn" class="primary-btn">Done</button>
+      </div>
+    </section>
+
+    <!-- Framework Reference -->
+    <nav id="bottom-nav">
+      <button class="nav-btn active" data-screen="home-screen">Home</button>
+      <button class="nav-btn" data-screen="reference-screen">Frameworks</button>
+    </nav>
+
+    <section id="reference-screen" class="screen">
+      <div id="framework-list"></div>
+    </section>
+  </div>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
